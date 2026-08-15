@@ -59,6 +59,19 @@ h1{margin:0; font-size:29px; line-height:1.15; letter-spacing:-.022em; font-weig
 .tile.hi .n{color:var(--ok)}
 .tile.wait{border-color:var(--warn); background:var(--warn-soft)}
 .tile.wait .n{color:var(--warn)}
+/* Плитка-переключатель: выглядит так же, но откликается на курсор и клавиатуру */
+button.tile{font:inherit; text-align:left; cursor:pointer; color:inherit;
+  transition:transform .12s ease, box-shadow .12s ease}
+button.tile:hover{transform:translateY(-1px); box-shadow:0 2px 10px rgba(0,0,0,.09)}
+button.tile:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+button.tile[aria-pressed="true"]{border-color:var(--accent);
+  box-shadow:inset 0 0 0 1px var(--accent)}
+button.tile[aria-pressed="true"] .l{color:var(--ink)}
+.resetbar{display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  padding:10px 14px; border:1px dashed var(--line); border-radius:10px;
+  color:var(--ink-2); font-size:13.5px; margin-top:-20px}
+.resetbar button{border-radius:999px}
+section[hidden]{display:none}
 
 section{display:flex; flex-direction:column; gap:13px}
 .shead{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
@@ -130,8 +143,12 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </header>
 
 <div class="tiles" id="tiles"></div>
+<div class="resetbar" id="resetBar" hidden>
+  <span>Показан один список из шести.</span>
+  <button id="resetBtn" type="button">Показать все списки</button>
+</div>
 
-<section>
+<section id="secOpen">
   <div class="shead"><h2>Выложены заново, приём заявок идёт</h2>
     <span class="count" id="cOpen"></span></div>
   <p class="note">Здесь вы знаете то, чего не знают остальные: в прошлый раз на эту же
@@ -144,7 +161,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
       <th>Заказчик</th><th>Новое извещение</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<section>
+<section id="secNone">
   <div class="shead"><h2>Заново пока не выкладывали</h2>
     <span class="count" id="cNone"></span></div>
   <p class="note">Потребность висит незакрытой. Это лучший момент для звонка: заказчик
@@ -157,7 +174,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
       <th>Извещение</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<section>
+<section id="secAgain">
   <div class="shead"><h2>Выложены заново, но приём уже закрыт</h2>
     <span class="count" id="cAgain"></span></div>
   <p class="note">Второй заход тоже прошёл мимо вас. Показывает, с какой скоростью
@@ -168,7 +185,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
       <th>Новое извещение</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<section>
+<section id="secLive">
   <div class="shead"><h2>Прочие активные закупки в ваших нишах</h2>
     <span class="count" id="cLive"></span></div>
   <p class="note">Открытый приём заявок, европейская часть и Юг, НМЦ 100 тыс. – 2 млн ₽.
@@ -182,7 +199,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
       <th>Извещение</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<section>
+<section id="secCust">
   <div class="shead"><h2>Заказчики: доля прекращённых контрактов</h2></div>
   <p class="note">По последним 50 контрактам каждого заказчика в реестре ЕИС. Высокая доля
   расторжений — повод не связываться, даже если закупка выглядит выгодной.</p>
@@ -244,17 +261,57 @@ document.addEventListener("keydown", e => {
   if(tr) window.open(tr.dataset.href, "_blank", "noopener");
 });
 
+// Плитка — не просто число, а переключатель: клик оставляет на странице
+// только тот список, который она считает. «Протоколов проверено» списка не
+// имеет, поэтому остаётся обычной плашкой.
 const tiles = [
-  ["zero","закупок без единой заявки","" ],
-  ["open","выложены заново, приём идёт","hi"],
-  ["none","заново пока не выкладывали","wait"],
-  ["again","повтор уже закрылся",""],
-  ["checked","протоколов проверено",""],
-  ["live","прочих активных закупок",""],
+  ["zero",   "закупок без единой заявки", "",     "secOpen secNone secAgain"],
+  ["open",   "выложены заново, приём идёт", "hi",   "secOpen"],
+  ["none",   "заново пока не выкладывали", "wait", "secNone"],
+  ["again",  "повтор уже закрылся", "",             "secAgain"],
+  ["checked","протоколов проверено", "",            ""],
+  ["live",   "прочих активных закупок", "",         "secLive"],
 ];
-document.getElementById("tiles").innerHTML = tiles.map(([k,l,cls]) =>
-  `<div class="tile ${cls}"><span class="n mono">${money(D.stats[k])}</span>
-   <span class="l">${l}</span></div>`).join("");
+
+document.getElementById("tiles").innerHTML = tiles.map(([k,l,cls,show]) => {
+  const inner = `<span class="n mono">${money(D.stats[k])}</span><span class="l">${l}</span>`;
+  return show
+    ? `<button class="tile ${cls}" data-show="${show}" aria-pressed="false">${inner}</button>`
+    : `<div class="tile ${cls}">${inner}</div>`;
+}).join("");
+
+const ALL_SECTIONS = ["secOpen","secNone","secAgain","secLive","secCust"];
+let активнаяПлитка = null;
+
+function показать(show){
+  const want = show ? show.split(" ") : ALL_SECTIONS;
+  ALL_SECTIONS.forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.hidden = show ? !want.includes(id) : false;
+  });
+  document.querySelectorAll(".tile[data-show]").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.show === show)));
+  document.getElementById("resetBar").hidden = !show;
+}
+
+document.getElementById("tiles").addEventListener("click", e => {
+  const b = e.target.closest(".tile[data-show]");
+  if(!b) return;
+  // повторный клик по активной плитке возвращает все списки
+  активнаяПлитка = (активнаяПлитка === b.dataset.show) ? null : b.dataset.show;
+  показать(активнаяПлитка);
+  if(активнаяПлитка){
+    const first = document.getElementById(активнаяПлитка.split(" ")[0]);
+    if(first) first.scrollIntoView({behavior:"smooth", block:"start"});
+  } else {
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  активнаяПлитка = null; показать(null);
+  window.scrollTo({top:0, behavior:"smooth"});
+});
 
 function deadline(left){
   if(left === null || left === undefined) return '<span class="chip mute">—</span>';
