@@ -83,6 +83,10 @@ button.tile:hover .hint{opacity:1}
   padding:10px 14px; border:1px dashed var(--line); border-radius:10px;
   color:var(--ink-2); font-size:13.5px; margin-top:-20px}
 .resetbar button{border-radius:999px}
+/* Атрибут hidden прячет элемент через стиль браузера, а он слабее любого
+   нашего правила: одного «display:flex» на #gate хватало, чтобы окно входа
+   не исчезало после успешного входа. Закрываем это раз и навсегда. */
+[hidden]{display:none !important}
 section[hidden]{display:none}
 
 section{display:flex; flex-direction:column; gap:13px}
@@ -592,7 +596,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 01:34", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 01:38", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
