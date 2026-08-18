@@ -592,7 +592,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 01:06", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 01:34", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -664,7 +664,7 @@ function signOut(){
 /* ------------------------------------------------ отметки */
 
 async function loadClaims(){
-  const list = await sb("/rest/v1/claims_view?select=reg,user_id,status,updated_at,name");
+  const list = await sbAll("/rest/v1/claims_view?select=reg,user_id,status,updated_at,name");
   CRM.byReg = {};
   const mine = {};
   for(const r of list){
@@ -762,12 +762,25 @@ function flash(text, bad){
 
 const unwrap = list => list.map(r => r.data);
 
+/* База отдаёт не больше тысячи строк за раз. Активных закупок втрое больше,
+   поэтому берём страницами, пока страница не окажется неполной. */
+async function sbAll(path, page){
+  page = page || 1000;
+  const out = [];
+  for(let from = 0; ; from += page){
+    const part = await sb(path + (path.indexOf("?") < 0 ? "?" : "&") +
+                          "limit=" + page + "&offset=" + from);
+    out.push.apply(out, part);
+    if(part.length < page) return out;
+  }
+}
+
 async function loadEverything(){
   const parts = await Promise.all([
-    sb("/rest/v1/purchases?kind=eq.zero&select=data").then(unwrap),
-    sb("/rest/v1/purchases?kind=eq.live&select=data").then(unwrap),
-    sb("/rest/v1/orgs?select=data").then(unwrap),
-    sb("/rest/v1/customers?select=data").then(unwrap),
+    sbAll("/rest/v1/purchases?kind=eq.zero&select=data").then(unwrap),
+    sbAll("/rest/v1/purchases?kind=eq.live&select=data").then(unwrap),
+    sbAll("/rest/v1/orgs?select=data").then(unwrap),
+    sbAll("/rest/v1/customers?select=data").then(unwrap),
     sb("/rest/v1/meta?id=eq.1&select=data"),
   ]);
   const m = (parts[4][0] && parts[4][0].data) || {stats: {}, date: "", built: ""};
@@ -829,10 +842,11 @@ function bootstrap(){
   const attempt = async function(){
     const e = mail.value.trim(), p = pass.value;
     if(!e || !p){ err.textContent = "Введите почту и пароль."; err.hidden = false; return; }
-    btn.disabled = true; err.hidden = true; btn.textContent = "Вхожу...";
+    btn.disabled = true; err.hidden = true; btn.textContent = "Загружаю данные...";
     try{
       await enter(e, p);
     }catch(ex){
+      console.error("вход:", ex);
       err.textContent = /Invalid login/i.test(ex.message)
         ? "Неверная почта или пароль."
         : /Email not confirmed/i.test(ex.message)
@@ -858,11 +872,20 @@ function bootstrap(){
     try{
       CRM.sess = JSON.parse(saved);
     }catch(e){ signOut(); gate.hidden = false; return; }
+    gate.hidden = false;
+    btn.disabled = true; btn.textContent = "Загружаю...";
     freshToken()
       .then(function(){ return sb("/auth/v1/user"); })
       .then(function(u){ CRM.me = whoFrom(u); })
       .then(afterLogin)
-      .catch(function(){ signOut(); gate.hidden = false; });
+      .catch(function(ex){
+        // раньше здесь просто показывалась форма, и человек не понимал, почему
+        signOut();
+        err.textContent = "Прошлый вход не восстановился: " + ex.message +
+                          ". Войдите заново.";
+        err.hidden = false;
+      })
+      .then(function(){ btn.disabled = false; btn.textContent = "Войти"; });
     return;
   }
   gate.hidden = false;
@@ -2041,6 +2064,7 @@ document.getElementById("tabs").addEventListener("click", e => {
 
 showTab("закупки");
 
+window.render = render;
 }
 
 </script>
