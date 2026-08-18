@@ -122,20 +122,17 @@ td.num{text-align:right; white-space:nowrap}
 #gate{position:fixed; inset:0; z-index:60; background:var(--bg);
   display:flex; align-items:center; justify-content:center; padding:20px}
 .gatebox{background:var(--card); border:1px solid var(--line); border-radius:14px;
-  padding:26px 28px; max-width:520px; width:100%}
+  padding:26px 28px; max-width:420px; width:100%}
 .gatebox h1{margin:0 0 8px; font-size:21px}
 .gatebox label{display:block; font-size:12.5px; color:var(--ink-2); margin:16px 0 0}
 .gatebox input{width:100%; margin-top:5px; padding:10px 12px; font-size:14px;
-  border:1px solid var(--line); border-radius:9px; background:var(--bg);
-  color:var(--ink); font-family:ui-monospace,Consolas,monospace}
-.gatebox button{margin-top:14px; padding:10px 20px; font-size:14px; font-weight:600;
+  border:1px solid var(--line); border-radius:9px; background:var(--bg); color:var(--ink)}
+.gatebox button{margin-top:18px; padding:10px 22px; font-size:14px; font-weight:600;
   border:0; border-radius:9px; background:var(--accent); color:#fff; cursor:pointer}
 .gatebox button:disabled{opacity:.6; cursor:default}
 .gateerr{margin-top:12px; padding:10px 12px; border-radius:9px;
   background:var(--bad-soft); color:var(--bad); font-size:13px}
-.gatehelp{margin-top:18px; font-size:12.5px; color:var(--ink-2)}
-.gatehelp summary{cursor:pointer; color:var(--accent)}
-.gatehelp ol{margin:10px 0 0; padding-left:18px; line-height:1.65}
+.gatehint{margin:16px 0 0; font-size:12px; color:var(--ink-3); line-height:1.5}
 #whoami{position:fixed; top:10px; right:14px; z-index:30; display:flex; gap:8px;
   align-items:center; font-size:12.5px; color:var(--ink-2);
   background:var(--card); border:1px solid var(--line);
@@ -569,37 +566,23 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 <div id="gate" hidden>
   <div class="gatebox">
     <h1>Панель закупок</h1>
-    <p class="note">Доступ только для своих. Данные лежат в закрытом
-    репозитории и подгружаются после входа — по ссылке посторонний не увидит
-    ничего.</p>
+    <p class="note">Доступ только для своих. Данные хранятся отдельно и
+    подгружаются после входа — по ссылке посторонний не увидит ничего.</p>
 
-    <label>Личный токен GitHub
-      <input type="password" id="gToken" placeholder="github_pat_..." autocomplete="off"></label>
+    <label>Почта
+      <input type="email" id="gMail" autocomplete="username" placeholder="вы@почта.ру"></label>
+    <label>Пароль
+      <input type="password" id="gPass" autocomplete="current-password"></label>
     <button type="button" id="gEnter">Войти</button>
     <div id="gErr" class="gateerr" hidden></div>
-
-    <details class="gatehelp">
-      <summary>Где взять токен</summary>
-      <ol>
-        <li>Примите приглашение в репозиторий <b>zakupki-crm</b> — оно придёт на
-          почту, привязанную к вашему аккаунту GitHub.</li>
-        <li>Откройте <a href="https://github.com/settings/personal-access-tokens/new"
-          target="_blank" rel="noopener">создание токена</a>.</li>
-        <li>В «Repository access» выберите <b>Only select repositories</b> и укажите
-          <b>azalfakk/zakupki-crm</b>.</li>
-        <li>В «Permissions → Repository permissions» поставьте <b>Contents:
-          Read and write</b>. Больше ничего не нужно.</li>
-        <li>Срок жизни поставьте какой удобно — когда истечёт, просто создадите новый.</li>
-        <li>Скопируйте токен и вставьте сюда. Он сохранится в этом браузере,
-          на сервер панели не уходит и виден только вам.</li>
-      </ol>
-    </details>
+    <p class="gatehint">Учётную запись заводит владелец панели. Забыли пароль —
+    напишите ему, сбрасывается за минуту.</p>
   </div>
 </div>
 
 <div id="whoami" hidden>
   <span id="whoName"></span>
-  <button type="button" id="whoOut" title="Забыть токен в этом браузере">выйти</button>
+  <button type="button" id="whoOut" title="Выйти на этом устройстве">выйти</button>
 </div>
 
 <script src="assets/jspdf.umd.min.js"></script>
@@ -609,120 +592,150 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 00:01", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 01:06", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
-/* Отметки и вспомогательные мелочи живут снаружи приложения: приложение
-   запускается только после входа, а отметки нужны уже во время загрузки. */
-var MARKS = {};
-function MARKS_INIT(o){ MARKS = o || {}; }
+var MARKS = {};                     // свои отметки: номер закупки -> {s, t}
+var LAST_SAVED = "{}";              // чтобы отправлять только изменившееся
+function MARKS_INIT(o){ MARKS = o || {}; LAST_SAVED = JSON.stringify(MARKS); }
 
 const escA = s => (s||"").replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 const CRM = {
-  repo: "azalfakk/zakupki-crm",
-  api:  "https://api.github.com",
-  token: localStorage.getItem("zb_token") || "",
-  me: null,          // {login, name}
-  claims: {},        // логин -> {номер закупки: {s, t, note}}
+  url: "https://tlvksmdojwcreswbiyaz.supabase.co",
+  key: "sb_publishable_d4obX0BZcSt6tIhF9mNbww_10OKFGql",
+  sess: null,                       // {access_token, refresh_token, expires_at}
+  me: null,                         // {id, login, email}
+  byReg: {},                        // номер -> [{user_id, name, status, updated_at}]
 };
 
-async function ghFetch(path, opts){
+/* ------------------------------------------------ запросы */
+
+async function sb(path, opts){
   opts = opts || {};
+  if(CRM.sess && !opts.noRefresh) await freshToken();
   const headers = {
-    "Authorization": "Bearer " + CRM.token,
-    "X-GitHub-Api-Version": "2022-11-28",
-    "Accept": opts.raw ? "application/vnd.github.raw" : "application/vnd.github+json",
+    "apikey": CRM.key,
+    "Authorization": "Bearer " + ((CRM.sess && CRM.sess.access_token) || CRM.key),
+    "Content-Type": "application/json",
   };
-  if(opts.body) headers["Content-Type"] = "application/json";
-  const r = await fetch(CRM.api + path, {method: opts.method || "GET", headers,
-                                         body: opts.body ? JSON.stringify(opts.body) : undefined});
-  if(r.status === 404 && opts.soft) return null;
-  if(!r.ok){
-    const t = await r.text();
-    throw new Error(r.status + " " + (t || "").slice(0, 200));
-  }
-  return opts.raw ? r.text() : r.json();
+  if(opts.prefer) headers["Prefer"] = opts.prefer;
+  const r = await fetch(CRM.url + path, {
+    method: opts.method || "GET", headers,
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  });
+  const text = await r.text();
+  if(!r.ok) throw new Error(r.status + " " + text.slice(0, 300));
+  return text ? JSON.parse(text) : null;
 }
 
-/* Файлы данных больше мегабайта обычный ответ не отдаёт — только сырой вид. */
-const dataFile = name =>
-  ghFetch(`/repos/${CRM.repo}/contents/data/${name}.json?ref=data`, {raw: true})
-    .then(JSON.parse);
+/* Токен живёт около часа. Обновляем заранее, иначе человек в середине дня
+   упирается в непонятную ошибку вместо работы. */
+async function freshToken(){
+  if(!CRM.sess || CRM.sess.expires_at - Date.now() > 120000) return;
+  const r = await fetch(CRM.url + "/auth/v1/token?grant_type=refresh_token", {
+    method: "POST",
+    headers: {"apikey": CRM.key, "Content-Type": "application/json"},
+    body: JSON.stringify({refresh_token: CRM.sess.refresh_token}),
+  });
+  if(!r.ok){ signOut(); throw new Error("сеанс истёк, войдите заново"); }
+  saveSession(await r.json());
+}
 
-/* ------------------------------------------------ отметки команды */
+function saveSession(j){
+  CRM.sess = {access_token: j.access_token, refresh_token: j.refresh_token,
+              expires_at: Date.now() + (j.expires_in || 3600) * 1000};
+  localStorage.setItem("zb_sess", JSON.stringify(CRM.sess));
+  if(j.user) CRM.me = whoFrom(j.user);
+}
+
+function whoFrom(u){
+  return {id: u.id, email: u.email,
+          login: (u.user_metadata && u.user_metadata.name) || (u.email || "").split("@")[0]};
+}
+
+function signOut(){
+  localStorage.removeItem("zb_sess");
+  CRM.sess = null; CRM.me = null;
+}
+
+/* ------------------------------------------------ отметки */
 
 async function loadClaims(){
-  CRM.claims = {};
-  const list = await ghFetch(`/repos/${CRM.repo}/contents/claims?ref=main`, {soft: true});
-  if(!list) return;
-  const files = list.filter(f => f.name.endsWith(".json") && !f.name.startsWith("."));
-  await Promise.all(files.map(async f => {
-    const login = f.name.replace(/\.json$/, "");
-    try{
-      const body = await ghFetch(
-        `/repos/${CRM.repo}/contents/claims/${f.name}?ref=main`, {raw: true});
-      CRM.claims[login] = JSON.parse(body);
-      CRM.sha = CRM.sha || {};
-      CRM.sha[login] = f.sha;
-    }catch(e){ /* чужой файл битый — не повод ронять панель */ }
-  }));
+  const list = await sb("/rest/v1/claims_view?select=reg,user_id,status,updated_at,name");
+  CRM.byReg = {};
+  const mine = {};
+  for(const r of list){
+    (CRM.byReg[r.reg] = CRM.byReg[r.reg] || []).push(r);
+    if(CRM.me && r.user_id === CRM.me.id) mine[r.reg] = {s: r.status, t: r.updated_at};
+  }
+  return mine;
 }
 
-/* Кто взял закупку: свои отметки и чужие показываются по-разному. */
 function takenBy(reg){
-  const out = [];
-  for(const [login, marks] of Object.entries(CRM.claims)){
-    const m = marks[reg];
-    if(m && m.s && m.s !== "skip") out.push({login, ...m});
-  }
-  return out;
+  return (CRM.byReg[reg] || [])
+    .filter(r => r.status !== "skip")
+    .map(r => ({login: r.name, id: r.user_id, s: r.status, t: r.updated_at}));
 }
 
 function takenLabel(reg){
   const who = takenBy(reg);
   if(!who.length) return "";
   return who.map(w => {
-    const mine = CRM.me && w.login === CRM.me.login;
-    const word = {take: "взял", sent: "подал", won: "выиграл", lost: "проиграл"}[w.s] || w.s;
-    return `<span class="taken ${mine ? "mine" : "other"}"
-      title="${escA(w.t ? w.t.slice(0,16).replace("T"," ") : "")}">${
-      escA(mine ? "вы: " + word : w.login + ": " + word)}</span>`;
+    const mine = CRM.me && w.id === CRM.me.id;
+    const word = {take:"взял", sent:"подал", won:"выиграл", lost:"проиграл"}[w.s] || w.s;
+    return '<span class="taken ' + (mine ? "mine" : "other") + '" title="' +
+      escA((w.t || "").slice(0, 16).replace("T", " ")) + '">' +
+      escA(mine ? "вы: " + word : w.login + ": " + word) + "</span>";
   }).join("");
 }
 
 let saveTimer = null, savePending = false;
 
-/* Пишем только свой файл — тогда столкновений между людьми не бывает вовсе.
-   Запись откладываем на секунду: щёлкать отметками можно быстрее, чем
-   отвечает сеть, и каждый щелчок отдельным коммитом никому не нужен. */
 function scheduleSave(){
-  // своя отметка должна попасть в общий свод сразу, а не после перезагрузки
-  if(CRM.me) CRM.claims[CRM.me.login] = MARKS;
   savePending = true;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveClaims, 1000);
+  saveTimer = setTimeout(saveClaims, 800);
 }
 
+/* Отправляем только изменившееся: щёлкать отметками можно быстрее, чем
+   отвечает сеть, и гонять весь список на каждый щелчок незачем. */
 async function saveClaims(){
   if(!CRM.me) return;
-  const login = CRM.me.login, path = `claims/${login}.json`;
-  const body = {
-    message: `Отметки ${login}`,
-    content: btoa(unescape(encodeURIComponent(JSON.stringify(MARKS)))),
-  };
-  if(CRM.sha && CRM.sha[login]) body.sha = CRM.sha[login];
+  const before = JSON.parse(LAST_SAVED);
+  const upserts = [], removals = [];
+  for(const reg of Object.keys(MARKS))
+    if(!before[reg] || before[reg].s !== MARKS[reg].s)
+      upserts.push({reg: reg, user_id: CRM.me.id, status: MARKS[reg].s,
+                    updated_at: new Date().toISOString()});
+  for(const reg of Object.keys(before))
+    if(!MARKS[reg]) removals.push(reg);
+
   try{
-    const res = await ghFetch(`/repos/${CRM.repo}/contents/${path}`,
-                              {method: "PUT", body});
-    CRM.sha = CRM.sha || {};
-    CRM.sha[login] = res.content.sha;
+    if(upserts.length)
+      await sb("/rest/v1/claims", {method: "POST", body: upserts,
+                                   prefer: "resolution=merge-duplicates"});
+    for(const reg of removals)
+      await sb("/rest/v1/claims?reg=eq." + encodeURIComponent(reg) +
+               "&user_id=eq." + CRM.me.id, {method: "DELETE"});
+
+    // свой свод правим на месте, чтобы подпись «вы: взял» появилась сразу
+    for(const u of upserts){
+      const list = (CRM.byReg[u.reg] || []).filter(r => r.user_id !== CRM.me.id);
+      list.push({reg: u.reg, user_id: CRM.me.id, status: u.status,
+                 updated_at: u.updated_at, name: CRM.me.login});
+      CRM.byReg[u.reg] = list;
+    }
+    for(const reg of removals)
+      CRM.byReg[reg] = (CRM.byReg[reg] || []).filter(r => r.user_id !== CRM.me.id);
+
+    LAST_SAVED = JSON.stringify(MARKS);
     savePending = false;
-    flash("отметки сохранены");
+    flash("сохранено");
+    render();
   }catch(e){
-    // чаще всего это устаревший sha: кто-то (или вы в другом окне) записал раньше
     flash("не удалось сохранить: " + e.message, true);
   }
 }
@@ -742,51 +755,65 @@ function flash(text, bad){
   el.textContent = text;
   el.hidden = false;
   clearTimeout(el._t);
-  el._t = setTimeout(() => { el.hidden = true; }, bad ? 6000 : 2200);
+  el._t = setTimeout(function(){ el.hidden = true; }, bad ? 6000 : 1800);
 }
 
-/* ------------------------------------------------ вход */
+/* ------------------------------------------------ загрузка и вход */
 
-async function signIn(token){
-  CRM.token = token;
-  const me = await ghFetch("/user");
-  CRM.me = {login: me.login, name: me.name || me.login};
-  localStorage.setItem("zb_token", token);
+const unwrap = list => list.map(r => r.data);
 
-  const [zero, live, orgs, cust, meta] = await Promise.all(
-    ["zero", "live", "orgs", "cust", "meta"].map(dataFile));
-  await loadClaims();
+async function loadEverything(){
+  const parts = await Promise.all([
+    sb("/rest/v1/purchases?kind=eq.zero&select=data").then(unwrap),
+    sb("/rest/v1/purchases?kind=eq.live&select=data").then(unwrap),
+    sb("/rest/v1/orgs?select=data").then(unwrap),
+    sb("/rest/v1/customers?select=data").then(unwrap),
+    sb("/rest/v1/meta?id=eq.1&select=data"),
+  ]);
+  const m = (parts[4][0] && parts[4][0].data) || {stats: {}, date: "", built: ""};
+  const mine = await loadClaims();
 
-  window.D = {zero, live, orgs, cust, stats: meta.stats,
-              date: meta.date, built: meta.built, priv: false};
-  MARKS_INIT(CRM.claims[CRM.me.login] || {});
+  window.D = {zero: parts[0], live: parts[1], orgs: parts[2], cust: parts[3],
+              stats: m.stats, date: m.date, built: m.built, priv: false};
+  MARKS_INIT(mine);
+}
 
+async function enter(email, password){
+  const r = await fetch(CRM.url + "/auth/v1/token?grant_type=password", {
+    method: "POST",
+    headers: {"apikey": CRM.key, "Content-Type": "application/json"},
+    body: JSON.stringify({email: email, password: password}),
+  });
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error_description || j.msg || j.message || "вход не удался");
+  saveSession(j);
+  await afterLogin();
+}
+
+async function afterLogin(){
+  await loadEverything();
   document.getElementById("gate").hidden = true;
-  const who = document.getElementById("whoami");
-  document.getElementById("whoName").textContent = CRM.me.name;
-  who.hidden = false;
+  document.getElementById("whoName").textContent = CRM.me.login;
+  document.getElementById("whoami").hidden = false;
   startApp();
   watchClaims();
 }
 
-/* Отметки коллег подтягиваем раз в минуту: иначе о том, что закупку уже взяли,
-   узнаёшь только после перезагрузки страницы, а смысл общей доски именно в том,
-   чтобы двое не готовили одну и ту же заявку. */
+/* Отметки коллег подтягиваем раз в минуту: смысл общей доски в том, чтобы
+   двое не готовили одну и ту же заявку. */
 function watchClaims(){
-  setInterval(async () => {
-    if(savePending) return;              // своя запись в пути — не мешаем
-    const before = JSON.stringify(CRM.claims);
+  setInterval(async function(){
+    if(savePending) return;
     try{
-      const mine = CRM.claims[CRM.me.login];
+      const before = JSON.stringify(CRM.byReg);
       await loadClaims();
-      if(mine) CRM.claims[CRM.me.login] = mine;
-      if(JSON.stringify(CRM.claims) !== before) render();
+      if(JSON.stringify(CRM.byReg) !== before) render();
     }catch(e){ /* сеть моргнула — попробуем через минуту */ }
   }, 60000);
 }
 
 function bootstrap(){
-  // Личная сборка на своём компьютере: данные уже внутри страницы, вход не нужен.
+  // Личная сборка на своём компьютере: данные внутри страницы, вход не нужен.
   if(!D.shell){
     MARKS_INIT(JSON.parse(localStorage.getItem("zb_marks") || "{}"));
     startApp();
@@ -796,41 +823,50 @@ function bootstrap(){
   const gate = document.getElementById("gate");
   const err  = document.getElementById("gErr");
   const btn  = document.getElementById("gEnter");
-  const inp  = document.getElementById("gToken");
+  const mail = document.getElementById("gMail");
+  const pass = document.getElementById("gPass");
 
-  const attempt = async token => {
-    if(!token){ err.textContent = "Вставьте токен."; err.hidden = false; return; }
-    btn.disabled = true; err.hidden = true; btn.textContent = "Проверяю...";
+  const attempt = async function(){
+    const e = mail.value.trim(), p = pass.value;
+    if(!e || !p){ err.textContent = "Введите почту и пароль."; err.hidden = false; return; }
+    btn.disabled = true; err.hidden = true; btn.textContent = "Вхожу...";
     try{
-      await signIn(token);
-    }catch(e){
-      localStorage.removeItem("zb_token");
-      err.textContent = /^401/.test(e.message)
-        ? "GitHub не принял токен. Проверьте, что скопировали его целиком и что срок не истёк."
-        : /^404/.test(e.message)
-        ? "Токен рабочий, но доступа к репозиторию нет. Примите приглашение и дайте токену права на azalfakk/zakupki-crm."
-        : "Не получилось войти: " + e.message;
+      await enter(e, p);
+    }catch(ex){
+      err.textContent = /Invalid login/i.test(ex.message)
+        ? "Неверная почта или пароль."
+        : /Email not confirmed/i.test(ex.message)
+        ? "Учётная запись не подтверждена — попросите владельца панели её подтвердить."
+        : "Не получилось войти: " + ex.message;
       err.hidden = false;
-      gate.hidden = false;
+      pass.value = "";
     }finally{
       btn.disabled = false; btn.textContent = "Войти";
     }
   };
 
-  btn.addEventListener("click", () => attempt(inp.value.trim()));
-  inp.addEventListener("keydown", e => { if(e.key === "Enter") attempt(inp.value.trim()); });
-  document.getElementById("whoOut").addEventListener("click", () => {
-    localStorage.removeItem("zb_token");
-    location.reload();
+  btn.addEventListener("click", attempt);
+  pass.addEventListener("keydown", function(ev){ if(ev.key === "Enter") attempt(); });
+  mail.addEventListener("keydown", function(ev){ if(ev.key === "Enter") pass.focus(); });
+  document.getElementById("whoOut").addEventListener("click", function(){
+    signOut(); location.reload();
   });
 
-  if(CRM.token){ gate.hidden = true; attempt(CRM.token); }
-  else gate.hidden = false;
+  // сеанс с прошлого раза: входить заново каждый день не нужно
+  const saved = localStorage.getItem("zb_sess");
+  if(saved){
+    try{
+      CRM.sess = JSON.parse(saved);
+    }catch(e){ signOut(); gate.hidden = false; return; }
+    freshToken()
+      .then(function(){ return sb("/auth/v1/user"); })
+      .then(function(u){ CRM.me = whoFrom(u); })
+      .then(afterLogin)
+      .catch(function(){ signOut(); gate.hidden = false; });
+    return;
+  }
+  gate.hidden = false;
 }
-
-window.addEventListener("beforeunload", e => {
-  if(savePending){ e.preventDefault(); e.returnValue = ""; }
-});
 
 document.addEventListener("DOMContentLoaded", bootstrap);
 if(document.readyState !== "loading") bootstrap();
