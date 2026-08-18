@@ -609,7 +609,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "18.08.2026 23:54", "priv": false};
+var D = {"shell": true, "built": "18.08.2026 23:56", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -699,6 +699,8 @@ let saveTimer = null, savePending = false;
    Запись откладываем на секунду: щёлкать отметками можно быстрее, чем
    отвечает сеть, и каждый щелчок отдельным коммитом никому не нужен. */
 function scheduleSave(){
+  // своя отметка должна попасть в общий свод сразу, а не после перезагрузки
+  if(CRM.me) CRM.claims[CRM.me.login] = MARKS;
   savePending = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveClaims, 1000);
@@ -764,6 +766,23 @@ async function signIn(token){
   document.getElementById("whoName").textContent = CRM.me.name;
   who.hidden = false;
   startApp();
+  watchClaims();
+}
+
+/* Отметки коллег подтягиваем раз в минуту: иначе о том, что закупку уже взяли,
+   узнаёшь только после перезагрузки страницы, а смысл общей доски именно в том,
+   чтобы двое не готовили одну и ту же заявку. */
+function watchClaims(){
+  setInterval(async () => {
+    if(savePending) return;              // своя запись в пути — не мешаем
+    const before = JSON.stringify(CRM.claims);
+    try{
+      const mine = CRM.claims[CRM.me.login];
+      await loadClaims();
+      if(mine) CRM.claims[CRM.me.login] = mine;
+      if(JSON.stringify(CRM.claims) !== before) render();
+    }catch(e){ /* сеть моргнула — попробуем через минуту */ }
+  }, 60000);
 }
 
 function bootstrap(){
@@ -990,6 +1009,8 @@ document.getElementById("fMark").innerHTML = [
   ["take",     "Беру в работу"],
   ["sent",     "Подал заявку"],
   ["skip",     "Не подхожу"],
+  ["free",     "Свободные — никто не взял"],
+  ["others",   "Взяли коллеги"],
 ].map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
 
 function match(r){
@@ -1000,7 +1021,9 @@ function match(r){
     if(state.mark === "new"      && !FRESH.has(r.reg)) return false;
     if(state.mark === "unmarked" && st) return false;
     if(state.mark === "hide"     && (st === "skip" || st === "sent")) return false;
-    if(["take","sent","skip"].includes(state.mark) && st !== state.mark) return false;
+    if(["take","sent","won","lost","skip"].includes(state.mark) && st !== state.mark) return false;
+    if(state.mark === "free"   && takenBy(r.reg).length) return false;
+    if(state.mark === "others" && !takenBy(r.reg).some(w => !CRM.me || w.login !== CRM.me.login)) return false;
   }
   if(state.q){
     const hay = ((r.subject||"") + " " + (r.customer||"") + " " + (r.reg||"") + " " +
