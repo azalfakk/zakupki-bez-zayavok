@@ -123,6 +123,62 @@ td.num{text-align:right; white-space:nowrap}
 .chip.bad{background:var(--bad-soft); color:var(--bad)}
 .chip.mute{background:var(--line-2); color:var(--ink-3)}
 
+#cardWrap{position:fixed; inset:0; z-index:70}
+#cardBack{position:absolute; inset:0; background:rgba(0,0,0,.34)}
+#card{position:absolute; top:0; right:0; bottom:0; width:min(760px,100%);
+  background:var(--bg); border-left:1px solid var(--line); overflow-y:auto;
+  box-shadow:-8px 0 30px rgba(0,0,0,.18)}
+#cardClose{position:sticky; top:10px; float:right; margin:10px 14px 0 0; z-index:2;
+  width:32px; height:32px; border:1px solid var(--line); border-radius:50%;
+  background:var(--card); color:var(--ink-2); font-size:19px; line-height:1; cursor:pointer}
+#cardClose:hover{color:var(--ink)}
+
+.cardhead{padding:20px 24px 0}
+.cardhead h2{margin:0 0 10px; font-size:19px; line-height:1.3}
+.cardbar{display:flex; flex-wrap:wrap; gap:8px 16px; font-size:12.5px;
+  color:var(--ink-3); padding-bottom:14px; border-bottom:1px solid var(--line)}
+.cardbar b{color:var(--ink-2); font-weight:600}
+
+.cardmoney{display:grid; gap:1px; background:var(--line);
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); border-bottom:1px solid var(--line)}
+.cardmoney div{background:var(--card); padding:13px 24px}
+.cardmoney b{display:block; font-size:17px; font-variant-numeric:tabular-nums; margin-bottom:2px}
+.cardmoney span{font-size:11.5px; color:var(--ink-3)}
+
+.cardsec{padding:16px 24px; border-bottom:1px solid var(--line)}
+.cardsec h3{margin:0 0 10px; font-size:12px; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-3)}
+.cardrow{display:grid; grid-template-columns:190px 1fr; gap:6px 14px;
+  font-size:13.5px; padding:4px 0}
+.cardrow > span:first-child{color:var(--ink-3); font-size:12.5px}
+.cardnote{font-size:13px; color:var(--ink-2); line-height:1.55}
+
+.cardbtns{display:flex; flex-wrap:wrap; gap:8px; padding:16px 24px}
+.cardbtns a, .cardbtns button{display:inline-block; padding:9px 16px; border-radius:9px;
+  font-size:13px; font-weight:600; text-decoration:none; cursor:pointer;
+  border:1px solid var(--line); background:var(--card); color:var(--ink)}
+.cardbtns a.main{background:var(--accent); color:#fff; border-color:transparent}
+.cardbtns a:hover, .cardbtns button:hover{opacity:.88}
+
+.cmt{padding:16px 24px 26px}
+.cmt h3{margin:0 0 12px; font-size:12px; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--ink-3)}
+.cmtlist{display:flex; flex-direction:column; gap:10px; margin-bottom:14px}
+.cmtitem{background:var(--card); border:1px solid var(--line); border-radius:10px;
+  padding:10px 13px}
+.cmtwho{font-size:12px; color:var(--ink-3); margin-bottom:4px;
+  display:flex; justify-content:space-between; gap:10px}
+.cmtwho b{color:var(--ink-2)}
+.cmtbody{font-size:13.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word}
+.cmtdel{border:0; background:none; color:var(--ink-3); cursor:pointer; font-size:11.5px}
+.cmtdel:hover{color:var(--bad)}
+.cmtform textarea{width:100%; min-height:74px; padding:10px 12px; font:inherit;
+  font-size:13.5px; color:var(--ink); background:var(--card);
+  border:1px solid var(--line); border-radius:10px; resize:vertical}
+.cmtform .controls{margin-top:8px}
+.cmtempty{font-size:13px; color:var(--ink-3)}
+
+
 #gate{position:fixed; inset:0; z-index:60; background:var(--bg);
   display:flex; align-items:center; justify-content:center; padding:20px}
 .gatebox{background:var(--card); border:1px solid var(--line); border-radius:14px;
@@ -568,6 +624,15 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 
 
 
+<div id="cardWrap" hidden>
+  <div id="cardBack"></div>
+  <aside id="card" role="dialog" aria-label="Карточка закупки">
+    <button type="button" id="cardClose" title="Закрыть (Esc)">×</button>
+    <div id="cardBody"></div>
+  </aside>
+</div>
+
+
 <div id="gate" hidden>
   <div class="gatebox">
     <h1>Панель закупок</h1>
@@ -597,7 +662,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 16:22", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 16:24", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -800,8 +865,9 @@ async function loadEverything(){
   const m = (parts[4][0] && parts[4][0].data) || {stats: {}, date: "", built: ""};
   const mine = await loadClaims();
 
+  // данные пришли из базы после входа — контактные колонки показывать можно
   window.D = {zero: parts[0], live: parts[1], orgs: parts[2], cust: parts[3],
-              stats: m.stats, date: m.date, built: m.built, priv: false};
+              stats: m.stats, date: m.date, built: m.built, priv: true};
   MARKS_INIT(mine);
 }
 
@@ -966,7 +1032,10 @@ const custCell = r => r.cust_seen
 document.addEventListener("click", e => {
   if(e.target.closest("a")) return;
   const tr = e.target.closest("tr[data-href]");
-  if(tr) window.open(tr.dataset.href, "_blank", "noopener");
+  // Раньше строка уводила прямо в ЕИС, и всё, что конвейер выяснил про
+  // закупку, оставалось невидимым. Теперь открывается карточка, а ссылка
+  // на извещение — кнопка внутри неё.
+  if(tr) openCard(tr.dataset.reg || (tr.dataset.href || "").split("regNumber=")[1] || "");
 });
 document.addEventListener("keydown", e => {
   if(e.key !== "Enter") return;
@@ -2059,6 +2128,204 @@ document.getElementById("oName").addEventListener("input", findOrg);
       '<td class="num mono">' + money(Math.round(o.avg_price || 0)) + '</td></tr>';
   }).join("");
 })();
+
+/* ---------------------------------------- карточка закупки */
+
+let cardReg = null;
+
+const EIS_LINK = reg =>
+  "https://zakupki.gov.ru/epz/order/notice/ea20/view/common-info.html?regNumber=" + reg;
+
+function fmtDate(d){
+  if(!d) return "";
+  const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + "." + m[2] + "." + m[1] : String(d);
+}
+
+function leftWord(n){
+  if(n === null || n === undefined) return "";
+  if(n < 0) return "срок истёк";
+  if(n === 0) return "последний день";
+  const t = n % 100 >= 11 && n % 100 <= 14 ? "дней"
+          : n % 10 === 1 ? "день" : (n % 10 >= 2 && n % 10 <= 4) ? "дня" : "дней";
+  return "остал" + (n % 10 === 1 && n % 100 !== 11 ? "ся " : "ось ") + n + " " + t;
+}
+
+function row(label, value){
+  return value ? '<div class="cardrow"><span>' + esc(label) + '</span><span>' +
+                 value + '</span></div>' : "";
+}
+
+/* Заказчик оценивается конвейером из ста баллов — показываем оценку прямо
+   здесь, чтобы не переходить на другую вкладку ради одного числа. */
+function cardOrg(r){
+  const o = (D.orgs || []).find(x => (x.name || "") === (r.customer || ""));
+  if(!o) return esc(r.customer || "");
+  const col = o.score >= 80 ? "var(--ok)" : o.score >= 60 ? "var(--accent)"
+            : o.score >= 40 ? "var(--warn)" : "var(--bad)";
+  return esc(r.customer) + ' <b style="color:' + col + '">' + o.score + ' из 100</b>' +
+         ' <span class="cust">' + esc(o.verdict || "") + '</span>';
+}
+
+function cardHTML(r){
+  const left = r.nleft !== null && r.nleft !== undefined ? r.nleft : r.left;
+  const price = r.nnmck || r.nmck;
+  const secBid = (r.sec_bid || "").replace(/\s*Российский рубль\s*/i, " ₽");
+  const marks = takenLabel(r.reg);
+
+  return '<div class="cardhead">' +
+      '<h2>' + esc(r.subject || "") + '</h2>' +
+      '<div class="cardbar">' +
+        (r.cat ? '<span><b>' + esc(r.cat) + '</b></span>' : "") +
+        (r.region ? '<span>' + esc(r.region) + '</span>' : "") +
+        (left !== null && left !== undefined
+          ? '<span style="color:' + (left <= 2 ? "var(--bad)" : "var(--ink-2)") + '">' +
+            esc(leftWord(left)) + '</span>' : "") +
+        (r.okpd ? '<span>ОКПД2 ' + esc(r.okpd) + '</span>' : "") +
+      '</div>' +
+    '</div>' +
+
+    '<div class="cardmoney">' +
+      '<div><b>' + money(price) + ' ₽</b><span>начальная цена</span></div>' +
+      '<div><b>' + (secBid ? esc(secBid) : "не требуется") + '</b>' +
+        '<span>обеспечение заявки</span></div>' +
+      '<div><b>' + (r.sec ? esc(r.sec) : "не требуется") + '</b>' +
+        '<span>обеспечение контракта</span></div>' +
+    '</div>' +
+
+    (r.why ? '<div class="cardsec"><h3>Почему никто не подался</h3>' +
+      '<div class="chips">' + whyChip(r) + natChip(r) + '</div>' +
+      '<p class="cardnote" style="margin:10px 0 0">' + esc(r.why_text || "") + '</p>' +
+    '</div>' : "") +
+
+    '<div class="cardsec"><h3>Заказчик</h3>' +
+      '<div class="cardnote">' + cardOrg(r) + '</div>' +
+      row("Место поставки", esc(r.place || "")) +
+      row("Поставить до", esc(r.term || "")) +
+    '</div>' +
+
+    ((r.phone || r.mail) ? '<div class="cardsec"><h3>Контактное лицо</h3>' +
+      row("Телефон", esc(r.phone || "")) +
+      row("Почта", r.mail ? '<a href="mailto:' + esc(r.mail) + '">' + esc(r.mail) + '</a>' : "") +
+    '</div>' : "") +
+
+    ((r.unit_nmck || r.margin_pct !== null && r.margin_pct !== undefined)
+      ? '<div class="cardsec"><h3>Экономика</h3>' +
+        row("Количество", r.qty ? esc(String(r.qty)) : "") +
+        row("Цена за штуку по НМЦК", r.unit_nmck ? money(Math.round(r.unit_nmck)) + " ₽" : "") +
+        row("Нашли по", r.unit_cost ? money(Math.round(r.unit_cost)) + " ₽" : "") +
+        row("Маржа", (r.margin_pct !== null && r.margin_pct !== undefined)
+              ? Math.round(r.margin_pct) + "%" + (r.margin ? " · " + money(Math.round(r.margin)) + " ₽" : "") : "") +
+        row("Достоверность", r.conf ? r.conf + "%" + (r.conf_why ? " — " + esc(r.conf_why) : "") : "") +
+      '</div>' : "") +
+
+    (r.requirements ? '<div class="cardsec"><h3>Требования к участнику</h3>' +
+      '<p class="cardnote">' + esc(r.requirements).replace(/ \| /g, "<br>") + '</p>' +
+    '</div>' : "") +
+
+    '<div class="cardsec"><h3>Сроки и номера</h3>' +
+      row("Окончание подачи", esc(fmtDate(r.nclose || r.close))) +
+      row("Извещение", '<span class="mono">' + esc(r.nreg || r.reg) + '</span>') +
+      (r.nreg && r.reg !== r.nreg
+        ? row("Прошлый раз", '<span class="mono">' + esc(r.reg) + '</span>') : "") +
+      (r.rounds > 1 ? row("Кругов без заявок", r.rounds) : "") +
+    '</div>' +
+
+    (marks ? '<div class="cardsec"><h3>Кто занимается</h3>' + marks + '</div>' : "") +
+
+    '<div class="cardbtns">' +
+      '<a class="main" href="' + EIS_LINK(r.nreg || r.reg) + '" target="_blank" rel="noopener">' +
+        'Открыть извещение в ЕИС</a>' +
+      '<a href="https://zakupki.gov.ru/epz/order/notice/ea20/view/documents.html?regNumber=' +
+        esc(r.nreg || r.reg) + '" target="_blank" rel="noopener">Документация</a>' +
+      '<button type="button" onclick="window.print()">Печать</button>' +
+    '</div>' +
+
+    '<div class="cmt"><h3>Комментарии</h3><div id="cmtBox"></div></div>';
+}
+
+/* ------------------------------------------------ комментарии */
+
+async function loadComments(reg){
+  const box = document.getElementById("cmtBox");
+  if(!box) return;
+  if(!CRM.me){
+    box.innerHTML = '<p class="cmtempty">Комментарии доступны после входа.</p>';
+    return;
+  }
+  let list = [];
+  try{
+    list = await sbAll("/rest/v1/comments_view?select=id,reg,user_id,body,created_at,name" +
+                       "&reg=eq." + encodeURIComponent(reg) + "&order=created_at.asc");
+  }catch(e){
+    box.innerHTML = '<p class="cmtempty">Не удалось загрузить: ' + esc(e.message) + '</p>';
+    return;
+  }
+  const items = list.length ? list.map(c =>
+    '<div class="cmtitem"><div class="cmtwho"><b>' + esc(c.name) + '</b>' +
+      '<span>' + esc(String(c.created_at).slice(0,16).replace("T"," ")) +
+      (CRM.me && c.user_id === CRM.me.id
+        ? ' <button type="button" class="cmtdel" data-id="' + c.id + '">удалить</button>' : "") +
+      '</span></div>' +
+      '<div class="cmtbody">' + esc(c.body) + '</div></div>'
+  ).join("") : '<p class="cmtempty">Пока ничего не написано.</p>';
+
+  box.innerHTML = '<div class="cmtlist">' + items + '</div>' +
+    '<div class="cmtform"><textarea id="cmtText" placeholder="Заметка для своих: что выяснили, где искать товар, почему не идём"></textarea>' +
+    '<div class="controls"><button type="button" id="cmtSend">Отправить</button></div></div>';
+
+  document.getElementById("cmtSend").addEventListener("click", () => sendComment(reg));
+  box.querySelectorAll(".cmtdel").forEach(b =>
+    b.addEventListener("click", () => delComment(b.dataset.id, reg)));
+}
+
+async function sendComment(reg){
+  const ta = document.getElementById("cmtText");
+  const body = (ta.value || "").trim();
+  if(!body) return;
+  const btn = document.getElementById("cmtSend");
+  btn.disabled = true; btn.textContent = "Отправляю...";
+  try{
+    await sb("/rest/v1/comments", {method: "POST",
+      body: [{reg: reg, user_id: CRM.me.id, body: body}]});
+    ta.value = "";
+    await loadComments(reg);
+  }catch(e){
+    flash("не отправилось: " + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = "Отправить";
+  }
+}
+
+async function delComment(id, reg){
+  try{
+    await sb("/rest/v1/comments?id=eq." + encodeURIComponent(id), {method: "DELETE"});
+    await loadComments(reg);
+  }catch(e){ flash("не удалилось: " + e.message, true); }
+}
+
+/* ------------------------------------------------ открытие и закрытие */
+
+function openCard(reg){
+  const r = (D.zero || []).concat(D.live || []).find(x => x.reg === reg || x.nreg === reg);
+  if(!r) return;
+  cardReg = r.reg;
+  document.getElementById("cardBody").innerHTML = cardHTML(r);
+  document.getElementById("cardWrap").hidden = false;
+  document.getElementById("card").scrollTop = 0;
+  loadComments(r.reg);
+}
+
+function closeCard(){
+  document.getElementById("cardWrap").hidden = true;
+  cardReg = null;
+}
+
+document.getElementById("cardClose").addEventListener("click", closeCard);
+document.getElementById("cardBack").addEventListener("click", closeCard);
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && !document.getElementById("cardWrap").hidden) closeCard();
+});
 
 /* ---------------------------------------- вкладки */
 
