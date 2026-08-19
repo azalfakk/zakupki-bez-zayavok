@@ -662,7 +662,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 16:24", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 16:27", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -979,7 +979,10 @@ const EIS = "https://zakupki.gov.ru/epz/order/notice/ea20/view/common-info.html?
 
 const esc = s => (s||"").replace(/[&<>"]/g, c =>
   ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const money = n => (n||0).toLocaleString("ru-RU").replace(/,/g," ");
+/* Округляем до рубля до форматирования: в русской записи запятая — это
+   десятичный разделитель, и замена её на пробел превращала 103099.99
+   в «103 099 99». Копейки в закупках всё равно ничего не решают. */
+const money = n => Math.round(n || 0).toLocaleString("ru-RU").replace(/,/g, " ");
 const link = r => `<a class="mono reg" href="${EIS}${esc(r)}" target="_blank" rel="noopener">${esc(r)}</a>`;
 
 function deadline(left){
@@ -2258,7 +2261,11 @@ async function loadComments(reg){
     list = await sbAll("/rest/v1/comments_view?select=id,reg,user_id,body,created_at,name" +
                        "&reg=eq." + encodeURIComponent(reg) + "&order=created_at.asc");
   }catch(e){
-    box.innerHTML = '<p class="cmtempty">Не удалось загрузить: ' + esc(e.message) + '</p>';
+    // таблицы ещё нет — это не поломка, а незаконченная настройка
+    const notReady = /PGRST205|comments/.test(e.message) && /404/.test(e.message);
+    box.innerHTML = '<p class="cmtempty">' + (notReady
+      ? "Комментарии ещё не подключены: в базе не создана таблица."
+      : "Не удалось загрузить: " + esc(e.message)) + '</p>';
     return;
   }
   const items = list.length ? list.map(c =>
