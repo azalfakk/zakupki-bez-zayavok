@@ -597,7 +597,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 12:38", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 12:41", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -632,7 +632,16 @@ async function sb(path, opts){
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   const text = await r.text();
-  if(!r.ok) throw new Error(r.status + " " + text.slice(0, 300));
+  if(!r.ok){
+    // Свежевыпущенный пропуск иногда на долю секунды выглядит для базы
+    // «выданным в будущем» — часы служб расходятся на доли секунды.
+    // Это гонка, а не ошибка: подождать и повторить достаточно.
+    if(r.status === 401 && text.indexOf("PGRST303") >= 0 && !opts.retried){
+      await new Promise(function(res){ setTimeout(res, 1500); });
+      return sb(path, Object.assign({}, opts, {retried: true}));
+    }
+    throw new Error(r.status + " " + text.slice(0, 300));
+  }
   return text ? JSON.parse(text) : null;
 }
 
