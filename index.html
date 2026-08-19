@@ -332,6 +332,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
   <input type="search" id="fSearch" placeholder="Поиск по товару, заказчику или номеру закупки">
   <select id="fRegion" aria-label="Регион"></select>
   <select id="fCat" aria-label="Категория товара"></select>
+  <select id="fWhy" aria-label="Почему никто не подался"></select>
   <select id="fMark" aria-label="Отметки"></select>
   <button type="button" id="fReset" hidden>Сбросить фильтры</button>
   <span class="fcount" id="fCount"></span>
@@ -596,7 +597,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "19.08.2026 12:26", "priv": false};
+var D = {"shell": true, "built": "19.08.2026 12:38", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -966,7 +967,7 @@ document.addEventListener("keydown", e => {
 
 /* ------------------------------------------------ фильтры */
 
-const state = {q:"", region:"", cat:"", mark:"", section:null};
+const state = {q:"", region:"", cat:"", mark:"", why:"", section:null};
 
 /* Национальный режим. Для нас важен не сам факт, а что он означает при пустом
    поле конкурентов: запрет закрывает импорт совсем, ограничение срабатывает
@@ -977,6 +978,20 @@ const NAT = {
   "ограничение":  ["warn", "ограничение",     "Импорт отклонят, только если кто-то подаст заявку с товаром из ЕАЭС. Если конкурентов нет — проходим."],
   "преимущество": ["",     "преференция 15%", "Российскому товару дают ценовую преференцию. На допуск не влияет."],
 };
+
+
+/* Диагноз: почему на закупку никто не подался. Вес 3 — причина закрывающая,
+   2 — весомая, 1 — досадная, 0 — причины нет либо данных не хватает.
+   Главная строка вывода — «причина не найдена»: обычный товар, приемлемый
+   заказчик, рабочие условия, и просто никто не посмотрел. */
+const WHY_CLS = {3: "bad", 2: "warn", 1: "mute", 0: ""};
+
+function whyChip(r){
+  if(!r.why) return "";
+  const cls = r.why === "причина не найдена" ? "ok" : (WHY_CLS[r.why_w] || "mute");
+  return '<span class="chip ' + cls + '" title="' + esc(r.why_text) + '">' +
+         esc(r.why) + '</span>';
+}
 
 function natChip(r){
   if(r.natreg === null || r.natreg === undefined)
@@ -1061,6 +1076,7 @@ function fillSelect(id, items, label){
   el.innerHTML = `<option value="">${label}</option>` +
     items.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
 }
+fillSelect("fWhy", uniq(D.zero, "why"), "Любая причина");
 fillSelect("fRegion", uniq(ALL, "region"), "Все регионы");
 fillSelect("fCat",    uniq(ALL, "cat"),    "Все товары");
 
@@ -1079,6 +1095,7 @@ document.getElementById("fMark").innerHTML = [
 function match(r){
   if(state.region && r.region !== state.region) return false;
   if(state.cat && r.cat !== state.cat) return false;
+  if(state.why && r.why !== state.why) return false;
   if(state.mark){
     const st = (MARKS[r.reg] || {}).s || "";
     if(state.mark === "new"      && !FRESH.has(r.reg)) return false;
@@ -1125,7 +1142,7 @@ function render(){
       <td>${deadline(r.nleft)}<div class="cust mono">до ${r.nclose||""}</div></td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)} · совпадение ${r.match === "exact" ? "точное" : "проверьте"}</span>
-        <div class="chips">${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}<div class="cust mono">→ ${money(r.nnmck)}</div></td>
       <td class="num">${unitCell(r)}</td>
@@ -1141,7 +1158,7 @@ function render(){
       <td>${pctCell(r)}</td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)}</span>
-        <div class="chips">${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}</td>
       <td><span class="chip bad">${r.rounds} раза без заявок</span></td>
@@ -1155,7 +1172,7 @@ function render(){
       <td>${pctCell(r)}</td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)}${r.okpd?" · ОКПД2 "+esc(r.okpd):""}${r.term?" · поставить до "+esc(r.term):""}</span>
-        <div class="chips">${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}</td>
       <td style="font-size:12.5px">${secCell(r)}</td>
@@ -1189,7 +1206,7 @@ function render(){
       <td style="font-size:12px">${link(r.reg)}</td>
     </tr>`);
 
-  const filtered = !!(state.q || state.region || state.cat || state.mark);
+  const filtered = !!(state.q || state.region || state.cat || state.mark || state.why);
   const marked = Object.keys(MARKS).length;
   document.getElementById("fCount").textContent = (filtered
     ? `Под фильтр попало ${zero.length + live.length} из ${ALL.length} закупок`
@@ -1208,15 +1225,19 @@ document.getElementById("fRegion").addEventListener("change", e => {
 document.getElementById("fCat").addEventListener("change", e => {
   state.cat = e.target.value; render();
 });
+document.getElementById("fWhy").addEventListener("change", e => {
+  state.why = e.target.value; render();
+});
 document.getElementById("fMark").addEventListener("change", e => {
   state.mark = e.target.value; render();
 });
 document.getElementById("fReset").addEventListener("click", () => {
-  state.q = state.region = state.cat = state.mark = "";
+  state.q = state.region = state.cat = state.mark = state.why = "";
   document.getElementById("fSearch").value = "";
   document.getElementById("fRegion").value = "";
   document.getElementById("fCat").value = "";
   document.getElementById("fMark").value = "";
+  document.getElementById("fWhy").value = "";
   render();
 });
 
