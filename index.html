@@ -177,6 +177,10 @@ td.num{text-align:right; white-space:nowrap}
   border:1px solid var(--line); border-radius:10px; resize:vertical}
 .cmtform .controls{margin-top:8px}
 .cmtempty{font-size:13px; color:var(--ink-3)}
+.chk{margin:0; padding-left:20px; display:flex; flex-direction:column; gap:9px}
+.chk li{font-size:13.5px; line-height:1.45}
+.chk li b{display:block; margin-bottom:2px}
+.chk li span{color:var(--ink-2); font-size:12.5px}
 
 
 #gate{position:fixed; inset:0; z-index:60; background:var(--bg);
@@ -662,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "20.08.2026 23:19", "priv": false};
+var D = {"shell": true, "built": "20.08.2026 23:34", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -1067,6 +1071,10 @@ const NAT = {
    заказчик, рабочие условия, и просто никто не посмотрел. */
 const WHY_CLS = {3: "bad", 2: "warn", 1: "mute", 0: ""};
 
+function smpChip(r){
+  return r.smp ? '<span class="chip ok" title="Преимущество по ч. 3 ст. 30: участвовать могут только субъекты малого предпринимательства — крупные игроки не допущены">только для малого бизнеса</span>' : "";
+}
+
 function whyChip(r){
   if(!r.why) return "";
   const cls = r.why === "причина не найдена" ? "ok" : (WHY_CLS[r.why_w] || "mute");
@@ -1223,7 +1231,7 @@ function render(){
       <td>${deadline(r.nleft)}<div class="cust mono">до ${r.nclose||""}</div></td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)} · совпадение ${r.match === "exact" ? "точное" : "проверьте"}</span>
-        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${smpChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}<div class="cust mono">→ ${money(r.nnmck)}</div></td>
       <td class="num">${unitCell(r)}</td>
@@ -1239,7 +1247,7 @@ function render(){
       <td>${pctCell(r)}</td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)}</span>
-        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${smpChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}</td>
       <td><span class="chip bad">${r.rounds} раза без заявок</span></td>
@@ -1253,7 +1261,7 @@ function render(){
       <td>${pctCell(r)}</td>
       <td class="subj">${esc(r.subject)}<span class="cust">${esc(r.customer)}</span>
         <span class="cust">${esc(r.cat)}${r.okpd?" · ОКПД2 "+esc(r.okpd):""}${r.term?" · поставить до "+esc(r.term):""}</span>
-        <div class="chips">${whyChip(r)}${natChip(r)}</div></td>
+        <div class="chips">${whyChip(r)}${smpChip(r)}${natChip(r)}</div></td>
       <td>${esc(r.region)}</td>
       <td class="num mono">${money(r.nmck)}</td>
       <td style="font-size:12.5px">${secCell(r)}</td>
@@ -2170,6 +2178,95 @@ function cardOrg(r){
          ' <span class="cust">' + esc(o.verdict || "") + '</span>';
 }
 
+
+/* ------------------------------------------------ чек-лист заявки
+
+   Заявку отклоняют не за плохую цену, а за формальности. Верховный суд в
+   мае 2025 подтвердил: страна происхождения — существенное условие, и
+   неопределённости в заявке быть не должно. Всё, что нужно проверить,
+   конвейер уже собрал — осталось собрать это в список действий. */
+
+function checklist(r){
+  const items = [];
+
+  items.push(["Страна происхождения товара",
+    "Указать однозначно, без «или/либо». Это существенное условие контракта, " +
+    "и неопределённость — первая причина отклонения."]);
+
+  const nat = r.natreg || "";
+  if(nat.indexOf("запрет") >= 0)
+    items.push(["Подтвердить российское происхождение",
+      "Иностранный товар не допускается. Нужна выписка из реестра российской " +
+      "промышленности или из реестра ЕАЭС на предлагаемую позицию."]);
+  else if(nat.indexOf("ограничение") >= 0)
+    items.push(["Учесть «второй лишний»",
+      "Если хоть один участник предложит товар из ЕАЭС, все заявки с импортом " +
+      "отклонят обязательно. Пока конкурентов нет — проходим, но запас прочности нулевой."]);
+  else if(nat.indexOf("преимуществ") >= 0)
+    items.push(["Помнить о преференции 15%",
+      "Российскому товару при сравнении цен дают скидку. На допуск не влияет, " +
+      "на победу — да."]);
+
+  if(r.smp)
+    items.push(["Декларация о принадлежности к СМП",
+      "Закупка только для малого бизнеса. Без декларации заявку отклонят, " +
+      "даже если вы малое предприятие."]);
+
+  if((r.requirements || "").indexOf("ополнительные требования") >= 0)
+    items.push(["Подтвердить опыт аналогичных контрактов",
+      "Установлены дополнительные требования: нужен исполненный контракт " +
+      "сопоставимого предмета. Без него отклонят."]);
+
+  if(r.sec_bid)
+    items.push(["Внести обеспечение заявки",
+      "Деньги должны лежать на спецсчёте до окончания подачи: " +
+      esc(String(r.sec_bid).replace(/\s*Российский рубль\s*/i, " ₽")) + "."]);
+
+  if(/эквивалент/i.test(r.subject || ""))
+    items.push(["Расписать характеристики эквивалента",
+      "В названии есть «или эквивалент». Предлагая не указанную марку, " +
+      "приведите характеристики по каждому пункту техзадания."]);
+
+  return items.length ? '<div class="cardsec"><h3>Чтобы не отклонили</h3><ol class="chk">' +
+    items.map(function(x){
+      return '<li><b>' + esc(x[0]) + '</b><span>' + x[1] + '</span></li>';
+    }).join("") + '</ol></div>' : "";
+}
+
+/* Ожидаемый повтор: заказчику товар всё ещё нужен, и закупка почти наверняка
+   выйдет заново. Готовиться заранее выгоднее, чем узнавать постфактум. */
+function waitBlock(r){
+  if(!r.wait) return "";
+  const d = new Date(r.wait + "T00:00:00");
+  const days = Math.round((d - new Date()) / 86400000);
+  const txt = days > 1 ? "ожидаем около " + fmtDate(r.wait) + ", это через " + days + " дн."
+            : days >= -3 ? "должна выйти со дня на день"
+            : "срок вышел " + Math.abs(days) + " дн. назад — возможно, заказчик передумал";
+  return '<div class="cardsec"><h3>Когда выйдет заново</h3>' +
+    '<p class="cardnote">' + esc(txt) + '. Медиана возврата по нашим данным — ' +
+    'четырнадцать дней, четверть закупок возвращается за девять.</p></div>';
+}
+
+
+/* Что реально уходит по этому товару. Берём из исполненных контрактов ЕИС:
+   там указан товарный знак и цена. Для закупок с запретом импорта это прямой
+   ответ на вопрос «что предлагать» — марки в выдаче уже прошли допуск. */
+function marketBlock(r){
+  const m = r.market || [];
+  if(!m.length) return "";
+  const rows = m.map(function(x){
+    const price = x.md ? money(x.md) + " ₽" +
+      (x.lo && x.hi && x.hi > x.lo ? ' <span class="cust">от ' + money(x.lo) +
+        " до " + money(x.hi) + "</span>" : "") : "";
+    return '<div class="cardrow"><span>' + esc(x.brand) + '</span><span>' +
+           price + ' <span class="cust">' + x.n + ' контр.</span></span></div>';
+  }).join("");
+  return '<div class="cardsec"><h3>Что покупают по этому товару</h3>' + rows +
+    '<p class="cardnote" style="margin-top:9px">Марки и цены из исполненных ' +
+    'контрактов по 44-ФЗ. Цена контракта, не за единицу — сравнивайте с оглядкой ' +
+    'на объём.</p></div>';
+}
+
 function cardHTML(r){
   const left = r.nleft !== null && r.nleft !== undefined ? r.nleft : r.left;
   const price = r.nnmck || r.nmck;
@@ -2185,6 +2282,7 @@ function cardHTML(r){
           ? '<span style="color:' + (left <= 2 ? "var(--bad)" : "var(--ink-2)") + '">' +
             esc(leftWord(left)) + '</span>' : "") +
         (r.okpd ? '<span>ОКПД2 ' + esc(r.okpd) + '</span>' : "") +
+        (r.smp ? '<span style="color:var(--ok)"><b>только для малого бизнеса</b></span>' : "") +
       '</div>' +
     '</div>' +
 
@@ -2221,6 +2319,10 @@ function cardHTML(r){
               ? Math.round(r.margin_pct) + "%" + (r.margin ? " · " + money(Math.round(r.margin)) + " ₽" : "") : "") +
         row("Достоверность", r.conf ? r.conf + "%" + (r.conf_why ? " — " + esc(r.conf_why) : "") : "") +
       '</div>' : "") +
+
+    marketBlock(r) +
+    checklist(r) +
+    waitBlock(r) +
 
     (r.requirements ? '<div class="cardsec"><h3>Требования к участнику</h3>' +
       '<p class="cardnote">' + esc(r.requirements).replace(/ \| /g, "<br>") + '</p>' +
