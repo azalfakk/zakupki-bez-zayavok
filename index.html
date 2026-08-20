@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "21.08.2026 00:27", "priv": false};
+var D = {"shell": true, "built": "21.08.2026 00:33", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -2292,6 +2292,72 @@ function supplyBlock(r){
     'выходит на этот товар и в какие деньги укладывается — то есть ваш потолок.</p></div>';
 }
 
+
+/* ------------------------------------------------ цена: бьётся или нет
+
+   На вопрос «почему не подались» вы ответили просто: цена не бьётся. Это же
+   объясняет и сами находки — заказчик поставил НМЦК ниже рынка, поэтому никто
+   и не пришёл. Значит главное, что панель может сделать, — сказать об этом
+   до того, как вы потратите полдня на обзвон.
+
+   Сравнение грубое: цена контракта против НМЦК без поправки на объём. Поэтому
+   формулировки осторожные, это ориентир, а не приговор. */
+
+function priceSignal(r){
+  const nmck = r.nnmck || r.nmck;
+  if(!nmck || !r.mkt_md) return "";
+  const diff = Math.round(100 * (nmck - r.mkt_md) / r.mkt_md);
+  let cls, txt;
+  if(diff <= -30){
+    cls = "bad";
+    txt = "НМЦК на " + Math.abs(diff) + "% ниже прежних сделок по такому товару — " +
+          "скорее всего, цена не побьётся";
+  } else if(diff <= -10){
+    cls = "warn";
+    txt = "НМЦК на " + Math.abs(diff) + "% ниже прежних сделок — считайте внимательно";
+  } else if(diff >= 30){
+    cls = "ok";
+    txt = "НМЦК на " + diff + "% выше прежних сделок — похоже, есть запас";
+  } else {
+    cls = "";
+    txt = "НМЦК примерно на уровне прежних сделок";
+  }
+  return '<div class="cardsec"><h3>Бьётся ли цена</h3>' +
+    '<div class="chips"><span class="chip ' + cls + '">' + esc(txt) + '</span></div>' +
+    '<div class="cardrow" style="margin-top:8px"><span>Эта закупка</span><span>' +
+      money(nmck) + ' ₽</span></div>' +
+    '<div class="cardrow"><span>Похожие контракты, серединная</span><span>' +
+      money(r.mkt_md) + ' ₽</span></div>' +
+    '<p class="cardnote" style="margin-top:8px">Сравнение с ценами исполненных ' +
+    'контрактов на такой же товар. Объёмы там свои, так что это ориентир, ' +
+    'а не расчёт.</p></div>';
+}
+
+/* Быстрая проверка цены. Обзвон и ручной поиск — это те самые полдня на одну
+   закупку. Ссылки открывают поиск по названию товара сразу там, где вы и так
+   смотрите, чтобы прикидка занимала секунды. */
+function priceLinks(r){
+  const q = (r.subject || "")
+    .replace(/^\s*(электронн\w*\s+аукцион\w*\s+на\s+)?(поставк\w*|приобретени\w*|закупк\w*|на\s+поставку)\s+/i, "")
+    .replace(/\s+(для|в\s+целях|в\s+рамках|по\s+адресу)\b.*$/i, "")
+    .replace(/[«»"()№]/g, " ")
+    .replace(/\s+/g, " ").trim().slice(0, 70);
+  if(!q) return "";
+  const e = encodeURIComponent(q);
+  const site = function(name, url){
+    return '<a href="' + url + '" target="_blank" rel="noopener">' + esc(name) + '</a>';
+  };
+  return '<div class="cardsec"><h3>Проверить цену за минуту</h3>' +
+    '<div class="cardbtns" style="padding:0">' +
+      site("Яндекс.Маркет", "https://market.yandex.ru/search?text=" + e) +
+      site("Ozon", "https://www.ozon.ru/search/?text=" + e) +
+      site("ВсеИнструменты", "https://www.vseinstrumenti.ru/search/?what=" + e) +
+      site("Поиск оптом", "https://yandex.ru/search/?text=" + encodeURIComponent(q + " оптом купить")) +
+    '</div>' +
+    '<p class="cardnote" style="margin-top:9px">Поиск по «' + esc(q) + '». ' +
+    'Если розница уже дороже НМЦК — дальше можно не смотреть.</p></div>';
+}
+
 function cardHTML(r){
   const left = r.nleft !== null && r.nleft !== undefined ? r.nleft : r.left;
   const price = r.nnmck || r.nmck;
@@ -2318,6 +2384,9 @@ function cardHTML(r){
       '<div><b>' + (r.sec ? esc(r.sec) : "не требуется") + '</b>' +
         '<span>обеспечение контракта</span></div>' +
     '</div>' +
+
+    priceSignal(r) +
+    priceLinks(r) +
 
     (r.why ? '<div class="cardsec"><h3>Почему никто не подался</h3>' +
       '<div class="chips">' + whyChip(r) + natChip(r) + '</div>' +
