@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "21.08.2026 00:06", "priv": false};
+var D = {"shell": true, "built": "21.08.2026 00:22", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -2267,6 +2267,28 @@ function marketBlock(r){
     'на объём.</p></div>';
 }
 
+
+/* Кто уже возит этот товар государству. Это не столько конкуренты, сколько
+   карта отрасли: у этих компаний товар есть, бумаги они оформлять умеют, и
+   цена сделки известна. С ними можно говорить — телефон и почта тут же. */
+function supplyBlock(r){
+  const s = r.supply || [];
+  if(!s.length) return "";
+  const rows = s.map(function(x){
+    const who = esc(x.name || "без названия") +
+      (x.region ? ' <span class="cust">' + esc(x.region) + '</span>' : "");
+    const how = (x.phone ? '<a href="tel:' + esc(x.phone.replace(/\s/g,"")) + '">' +
+                   esc(x.phone) + '</a>' : "") +
+                (x.mail ? ' <a href="mailto:' + esc(x.mail) + '">' + esc(x.mail) + '</a>' : "");
+    const price = x.price ? '<div class="cust">контракт на ' + money(x.price) + ' ₽' +
+                   (x.n > 1 ? ", всего " + x.n : "") + '</div>' : "";
+    return '<div class="cardrow"><span>' + who + '</span><span>' + how + price + '</span></div>';
+  }).join("");
+  return '<div class="cardsec"><h3>Кто уже возит этот товар</h3>' + rows +
+    '<p class="cardnote" style="margin-top:9px">Компании из исполненных контрактов ' +
+    'по 44-ФЗ на такой же товар. У них товар есть, а бумажную часть они уже проходили.</p></div>';
+}
+
 function cardHTML(r){
   const left = r.nleft !== null && r.nleft !== undefined ? r.nleft : r.left;
   const price = r.nnmck || r.nmck;
@@ -2320,6 +2342,7 @@ function cardHTML(r){
         row("Достоверность", r.conf ? r.conf + "%" + (r.conf_why ? " — " + esc(r.conf_why) : "") : "") +
       '</div>' : "") +
 
+    supplyBlock(r) +
     marketBlock(r) +
     checklist(r) +
     waitBlock(r) +
