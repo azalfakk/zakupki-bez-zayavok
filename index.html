@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "21.08.2026 14:00", "priv": false};
+var D = {"shell": true, "built": "21.08.2026 14:07", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -683,6 +683,7 @@ const CRM = {
   sess: null,                       // {access_token, refresh_token, expires_at}
   me: null,                         // {id, login, email}
   byReg: {},                        // номер -> [{user_id, name, status, updated_at}]
+  api: "", apiToken: "",            // живая проверка заказчика на сервере сбора
 };
 
 /* ------------------------------------------------ запросы */
@@ -864,9 +865,16 @@ async function loadEverything(){
     sbAll("/rest/v1/purchases?kind=eq.live&select=data").then(unwrap),
     sbAll("/rest/v1/orgs?select=data").then(unwrap),
     sbAll("/rest/v1/customers?select=data").then(unwrap),
-    sb("/rest/v1/meta?id=eq.1&select=data"),
+    sb("/rest/v1/meta?select=id,data"),
   ]);
-  const m = (parts[4][0] && parts[4][0].data) || {stats: {}, date: "", built: ""};
+  const rows4 = parts[4] || [];
+  const m = ((rows4.find(function(x){ return x.id === 1; }) || rows4[0] || {}).data)
+            || {stats: {}, date: "", built: ""};
+  // Настройки живой проверки лежат в той же таблице отдельной строкой:
+  // адрес сервера сбора и общий ключ. Их видит только вошедший.
+  const cfg = (rows4.find(function(x){ return x.id === 2; }) || {}).data || {};
+  CRM.api = cfg.api || "";
+  CRM.apiToken = cfg.token || "";
   const mine = await loadClaims();
 
   // данные пришли из базы после входа — контактные колонки показывать можно
@@ -2076,7 +2084,7 @@ function orgCard(o){
   '</div>';
 }
 
-function findOrg(){
+async function findOrg(){
   const innRaw = document.getElementById("oInn").value.replace(/\D/g, "");
   const nameQ = document.getElementById("oName").value.trim().toLowerCase();
   const box = document.getElementById("oCard");
@@ -2093,20 +2101,29 @@ function findOrg(){
     // запоминаем запрос: ночной цикл проверит этот ИНН и добавит в базу
     const queue = JSON.parse(localStorage.getItem("zb_org_queue") || "[]");
     if(!queue.includes(innRaw)){ queue.push(innRaw); localStorage.setItem("zb_org_queue", JSON.stringify(queue)); }
-    const issue = "https://github.com/azalfakk/zakupki-bez-zayavok/issues/new?title=" +
-      encodeURIComponent("Проверка ИНН " + innRaw) +
-      "&body=" + encodeURIComponent("Запрос проверки заказчика с панели.");
-    box.innerHTML = '<div class="orgcard"><div class="orgnote">' +
-      '<b>ИНН ' + esc(innRaw) + ' в базе пока нет.</b><br><br>' +
-      'Нажмите «Проверить этот ИНН» — заявка уйдёт в обработку, ответ придёт ' +
-      'туда же в течение ближайшего цикла обновления, а заказчик появится в панели.<br><br>' +
-      '<a class="btnlink" href="' + issue + '" target="_blank" rel="noopener">Проверить этот ИНН</a> ' +
-      '<a class="btnlink" href="https://zakupki.gov.ru/epz/order/extendedsearch/results.html?searchString=' +
-        encodeURIComponent(innRaw) + '&fz44=on&af=on&ca=on&pc=on" target="_blank" rel="noopener">' +
-        'Закупки в ЕИС</a> ' +
-      '<a class="btnlink" href="https://egrul.nalog.ru/index.html" target="_blank" rel="noopener">ЕГРЮЛ</a> ' +
-      '<a class="btnlink" href="https://pb.nalog.ru/search.html" target="_blank" rel="noopener">Прозрачный бизнес</a>' +
-      '</div></div>';
+    // Живая проверка: сервер сбора стоит в России и ходит и в ЕИС, и в
+    // налоговую. Браузер так не может, поэтому спрашиваем сервер.
+    if(CRM.api && CRM.apiToken){
+      box.innerHTML = '<div class="orgcard"><div class="orgnote">Проверяю ' +
+        esc(innRaw) + ' — это занимает до полуминуты...</div></div>';
+      try{
+        const res = await fetch(CRM.api + "?inn=" + encodeURIComponent(innRaw),
+                                {headers: {"X-Zb-Token": CRM.apiToken}});
+        const j = await res.json();
+        if(j.error){
+          box.innerHTML = '<div class="orgcard"><div class="orgnote">' +
+            esc(j.error) + '</div></div>';
+        } else {
+          box.innerHTML = orgCard(j);
+          ORGS.push(j);
+        }
+      }catch(e){
+        box.innerHTML = '<div class="orgcard"><div class="orgnote">' +
+          'Сервер проверки не ответил: ' + esc(e.message) + '</div></div>';
+      }
+      return;
+    }
+
     return;
   }
 
