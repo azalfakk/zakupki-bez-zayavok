@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "26.08.2026 23:15", "priv": false};
+var D = {"shell": true, "built": "26.08.2026 23:28", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -2375,6 +2375,35 @@ function priceLinks(r){
     'Если розница уже дороже НМЦК — дальше можно не смотреть.</p></div>';
 }
 
+
+/* Снять закупку с работы. Заказчик может закрыть потребность закупкой малого
+   объёма на сторонней площадке: в ЕИС процедура так и висит завершённой без
+   заявок, а контракт в реестре появляется недели спустя. Увидеть это может
+   только человек — поэтому кнопка, и действует она на всю команду. */
+async function markDead(reg, btn){
+  const why = prompt("Почему снимаем? Коротко — увидят все.",
+                     "закрыта помимо ЕИС");
+  if(why === null) return;
+  if(!CRM.api || !CRM.apiToken){ flash("нет связи с сервером", true); return; }
+  btn.disabled = true; btn.textContent = "Снимаю...";
+  try{
+    const res = await fetch(CRM.api.replace("/check", "/dead") +
+      "?reg=" + encodeURIComponent(reg) + "&why=" + encodeURIComponent(why),
+      {headers: {"X-Zb-Token": CRM.apiToken}});
+    const j = await res.json();
+    if(j.error) throw new Error(j.error);
+    // убираем из списков сразу, не дожидаясь ближайшего обновления
+    const row = (D.zero || []).find(x => x.reg === reg);
+    if(row) row.status = "taken";
+    flash("снято: " + why);
+    closeCard();
+    render();
+  }catch(e){
+    flash("не вышло: " + e.message, true);
+    btn.disabled = false; btn.textContent = "Неактуальна";
+  }
+}
+
 function cardHTML(r){
   const left = r.nleft !== null && r.nleft !== undefined ? r.nleft : r.left;
   const price = r.nnmck || r.nmck;
@@ -2456,6 +2485,9 @@ function cardHTML(r){
       '<a href="https://zakupki.gov.ru/epz/order/notice/ea20/view/documents.html?regNumber=' +
         esc(r.nreg || r.reg) + '" target="_blank" rel="noopener">Документация</a>' +
       '<button type="button" onclick="window.print()">Печать</button>' +
+      '<button type="button" onclick="markDead('' + esc(r.reg) +
+        '', this)" title="Заказчик закрыл потребность другим путём — убрать у всех">' +
+        'Неактуальна</button>' +
     '</div>' +
 
     '<div class="cmt"><h3>Комментарии</h3><div id="cmtBox"></div></div>';
