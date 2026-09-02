@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "02.09.2026 10:49", "priv": false};
+var D = {"shell": true, "built": "02.09.2026 11:38", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -684,6 +684,9 @@ const CRM = {
   me: null,                         // {id, login, email}
   byReg: {},                        // номер -> [{user_id, name, status, updated_at}]
   api: "", apiToken: "",            // живая проверка заказчика на сервере сбора
+  // Панель может открываться и с нашего сервера, и с GitHub Pages. Если она
+  // уже на сервере, к нему и обращаемся — так короче и надёжнее.
+  sameHost: location.hostname === "109.172.6.51",
 };
 
 /* ------------------------------------------------ запросы */
@@ -873,7 +876,7 @@ async function loadEverything(){
   // Настройки живой проверки лежат в той же таблице отдельной строкой:
   // адрес сервера сбора и общий ключ. Их видит только вошедший.
   const cfg = (rows4.find(function(x){ return x.id === 2; }) || {}).data || {};
-  CRM.api = cfg.api || "";
+  CRM.api = CRM.sameHost ? "/api/check" : (cfg.api || "");
   CRM.apiToken = cfg.token || "";
   const mine = await loadClaims();
 
