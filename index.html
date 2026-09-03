@@ -666,7 +666,7 @@ footer{border-top:1px solid var(--line); padding-top:18px; color:var(--ink-3);
 </div>
 
 <script>
-var D = {"shell": true, "built": "03.09.2026 15:05", "priv": false};
+var D = {"shell": true, "built": "03.09.2026 15:14", "priv": false};
 
 /* ---------------------------------------- вход и общие отметки */
 
@@ -2488,8 +2488,8 @@ function cardHTML(r){
       '<a href="https://zakupki.gov.ru/epz/order/notice/ea20/view/documents.html?regNumber=' +
         esc(r.nreg || r.reg) + '" target="_blank" rel="noopener">Документация</a>' +
       '<button type="button" onclick="window.print()">Печать</button>' +
-      '<button type="button" onclick="markDead('' + esc(r.reg) +
-        '', this)" title="Заказчик закрыл потребность другим путём — убрать у всех">' +
+      '<button type="button" class="deadbtn" data-reg="' + esc(r.reg) +
+        '" title="Заказчик закрыл потребность другим путём — убрать у всех">' +
         'Неактуальна</button>' +
     '</div>' +
 
@@ -2576,6 +2576,15 @@ function closeCard(){
   document.getElementById("cardWrap").hidden = true;
   cardReg = null;
 }
+
+
+/* Кнопка снятия. Номер лежит в атрибуте, а не подставляется в разметку
+   обработчика: так в коде страницы не появляется ни одной вставленной
+   кавычки, и сломать разбор нечем. */
+document.addEventListener("click", function(e){
+  const b = e.target.closest(".deadbtn");
+  if(b) markDead(b.dataset.reg, b);
+});
 
 document.getElementById("cardClose").addEventListener("click", closeCard);
 document.getElementById("cardBack").addEventListener("click", closeCard);
